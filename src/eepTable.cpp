@@ -70,7 +70,41 @@
     static void cliStatus( int n, char **arg )
     {
         DEFBP( bp );
-        RESPONSE( "RSSI %ddBm, Heap now=%d, Heap max=%d\r\n", WiFi.RSSI(), cpu.heapUsedNow(), cpu.heapUsedMax() );
+		
+		uint8_t m[6];
+		WiFi.macAddress( m );
+		IPAddress ipa; 
+		ipa = WiFi.localIP();  
+		
+		char *format = 
+			"\tCore: %s\r\n"
+			"\t MAC: %02x:%02x:%02x:%02x:%02x:%02x\r\n"
+			"\t  IP: %s\r\n"
+			"\tDHCP: %s\r\n";
+			
+		RESPONSE( format, 
+			ESP.getCoreVersion().c_str(),
+			m[0],m[1],m[2],m[3],m[4],m[5],
+			ipa.toString().c_str(),
+			WiFi.hostname().c_str() );
+			
+		format =
+				"\tSSID: %s\r\n"
+				"\t PWD: %s\r\n"
+				"\tChan: %d\r\n"
+				"\tRSSI: %d dBm\r\n"
+				"\tHeapUse: %d KB\r\n"
+				"\tHeapMax: %d KB\r\n";
+		
+		RESPONSE( format,
+			WiFi.SSID().c_str(),
+			WiFi.psk().c_str(),
+			WiFi.channel(),
+			WiFi.RSSI(), 
+			cpu.heapUsedNow()/1024,
+			cpu.heapUsedMax()/1024 );
+
+        // RESPONSE( "RSSI %ddBm, Heap now=%d, Heap max=%d\r\n", WiFi.RSSI(), cpu.heapUsedNow(), cpu.heapUsedMax() );
     }
     CMDTABLE eepTable[]= // must be external to be able to used by the cliSupport
     {        

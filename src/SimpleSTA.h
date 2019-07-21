@@ -4,6 +4,10 @@
   
 // Exported functions by ExampleSTA.cpp
 
+	bool startCLIAfter( int timeoutsec );
+    void interactForever();
+	
     void setupSTA();
     void loopSTA();
-    void interactForever();
+	
+	

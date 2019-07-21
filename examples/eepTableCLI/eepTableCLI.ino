@@ -5,21 +5,17 @@
  * 2 = typical boot with WiFi with no user EEPROM parms
  * Use the eepGlobals.ino to test user+eep parameters
 */
-#include <cliClass.h>       // CLI and EXE classes. Also includes the cpuClass.h
-#include <eepClass.h>   
-#include "eepTable.h"
-
+#include <externIO.h>
+#include <eepTable.h>
 #include <FS.h>
 
 // --------------- forward references (in this file) ---------------------------
 
-    void interactForever();
-    namespace mypTable 
-    {
-        extern void init( EXE &myexe );
-        extern CMDTABLE table[]; 
-    }
+    void interact();
+    extern CMDTABLE mypTable[]; 
+
 // ------------------- allocation of base classes ------------------------------
+
     CPU cpu;
     CLI cli;
     EXE exe;
@@ -33,13 +29,10 @@ void setup()
     SPIFFS.begin();                     // crashes sometimes if not present
     PF("This is test #%d\r\n", TEST );
     
-    mypTable::init( exe );              // use namespace 'myTable' to associate the exe class
-    eepTable::init( exe, eep );         // use namespace 'eepTable' to associate the eep tables
-     
-    exe.registerTable( mypTable::table );
-    exe.registerTable( eepTable::table );
+    exe.registerTable( mypTable );
+    exe.registerTable( eepTable );
     
-    interactForever();
+    interact();
 }
 #endif
 
@@ -50,26 +43,24 @@ void setup()
 void setup()
 {
     cpu.init();
-    SPIFFS.begin();  
+    ASSERT( SPIFFS.begin() );
+    
     PF("This is test #%d\r\n", TEST );
     
-    if( !eep.checkEEParms( myMAGIC, 0 ) )    // fetches parameters and returns TRUE or FALSE
+    if( !eep.checkEEParms( myMAGIC, 0 ) )       // fetches parameters and returns TRUE or FALSE
     {
         PF("Initializing parms!\r\n" );
         eep.initHeadParms( myMAGIC, 0 );
-        eep.initWiFiParms();            // initialize with default WiFis
+        eep.initWiFiParms();                    // initialize with default WiFis
     }
     eep.incrBootCount();
     eep.printHeadParms("--- Current Parms");    // print current parms
-    eep.printWiFiParms();                 
+    eep.printWiFiParms("--- WiFi Parms");                 
     
-    eepTable::init( exe, eep );         // create link to eep tables
-    mypTable::init( exe );               // create link to MY table
-     
-    exe.registerTable( mypTable::table );
-    exe.registerTable( eepTable::table );
+    exe.registerTable( mypTable );
+    exe.registerTable( eepTable );
     
-    interactForever();
+    interact();
 }
 #endif
 
@@ -79,23 +70,33 @@ void loop()
 }
 
 // ----------------------------- local CLI tables ---------------------------
-namespace mypTable
-{
-    static EXE *_exe;       //pointer to EXE class defined in main()
-    
-    void init( EXE &myexe ) {_exe = &myexe;}
-    void help( int n, char *arg[] ) {_exe->help( n, arg );}
 
-    CMDTABLE table[]= 
+    void help( int n, char *arg[] ) {exe.help( n, arg );}
+    void cliEx1( int n, char **arg )
+    {
+        BINIT( bp, arg );
+        if( bp )  bp->add("Buf Example 1\r\n");
+        else      PF("Prn Example 1\r\n");
+    }
+    void cliEx2( int n, char **arg )
+    {
+        BINIT( bp, arg );
+        if(  bp ) bp->add("Buf Example 2\r\n");
+        else      PF("Prn Example 2\r\n");
+    }
+    CMDTABLE mypTable[]= 
     {
         {"h", "Help! List of all commands", help },
+        {"ex1", "Example 1", cliEx1 },
+        {"ex2", "Example 2", cliEx2 },
         {NULL, NULL, NULL}
     };
-}
 
 // -----------------------------------------------------------------------------
-void interactForever()
+void interact()
 {
+    BUF temp(2000);                // response buffer
+    
     cli.init( ECHO_ON, "cmd: " );       
     PR("CLI Mode. Press 'h' for help\r\n");
     
@@ -105,10 +106,10 @@ void interactForever()
         if( cli.ready() )
         {
             char *p = cli.gets();
+
 //            exe.dispatchConsole( p );
-//            PF("--- Repeated ---\r\n");
-            
-            BUF temp(2000);                // response buffer
+//            PF("--- Repeated ---\r\n");           
+
             exe.dispatchBuf( p, temp );
             temp.print();
             

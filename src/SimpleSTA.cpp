@@ -12,7 +12,6 @@ void interactForever()
     PF("\r\nCLI Mode. Press 'h' for help\r\n");
     cpu.led( ON );
     
-    cli.init( ECHO_ON, "cmd: " );    
     cli.prompt();
     
     for(;;)
@@ -20,18 +19,49 @@ void interactForever()
         if( cli.ready() )
         {
             char *cmd = cli.gets();
+			if( strcmp( cmd, "exit")==0 )
+				break;
             exe.dispatchConsole( cmd );
             cli.prompt();
         }
     }
 }
+bool startCLIAfter( int timeout )
+{
+	cli.init( ECHO_ON, "cmd: " );       
+
+	PF("Press RETURN to start CLI within %d sec\r\n", timeout );
+
+	for( int i=0; i< timeout*100; i++ ) 	// 100 loops per second
+	{
+		cpu.toggleEvery( 100 );             // fast blink to indicate waiting for RETURN
+		if( (i%100)==0 ) 
+			PR(".");
+		if( Serial.read() == 0x0D )
+		{
+			CRLF();
+			interactForever();
+			PRN("Continuing Setup()...");
+			break;                          // break the loop if 'exit' is entered    
+		}
+		if( cpu.button() )
+            return true;
+		delay( 10 );
+	}   
+	return false;
+}
+
 // ----------------------- Exported functions -------------------------------------
 
 #define WIFI_TIMEOUT_SEC 5
 
 void setupSTA()
 {
-    PRN("\r\nSTA mode");
+    byte mac[6];
+	
+	PR("\r\nSTA mode...\r\n\tMAC=");
+	PRN( WiFi.macAddress() );                   // mac is used later to define mDNS
+	
     WiFi.mode(WIFI_STA);
 
     char *staticIP = eep.wifi.stIP;
@@ -47,7 +77,7 @@ void setupSTA()
     {
         if( WiFi.status() == WL_CONNECTED )
         {
-            PF( "\r\nConnected to %s. Hostname is %s. ", WiFi.SSID().c_str(), WiFi.hostname().c_str() );
+            PF( "Connected to %s. Hostname is %s. ", WiFi.SSID().c_str(), WiFi.hostname().c_str() );
             PR( "IP Address " ); PRN( WiFi.localIP() );
             //PR( fileList() );
             break;
@@ -56,13 +86,19 @@ void setupSTA()
         if( i%2 ) cpu.led( ON );
         else cpu.led( OFF );
     }    
-    BUF name(16);
-    name.set("GKELAB%d", eep.head.reboots );
-    if (!MDNS.begin( !name )) 
-        cpu.die("Error setting up MDNS responder!", 3 );
-    MDNS.addService("GKETCP", "tcp", eep.wifi.port );
-    MDNS.addService("GKEUDP", "udp", 5353);
-    PF("mDNS responder started. Ping for %s.local:%d\r\n", !name, eep.wifi.port); 
+    // BUF name(16);
+    // name.set("GKELAB%d", eep.head.reboots );
+    // if (!MDNS.begin( !name )) 
+        // cpu.die("Error setting up MDNS responder!", 3 );
+    // MDNS.addService("GKETCP", "tcp", eep.wifi.port );
+    // MDNS.addService("GKEUDP", "udp", 5353);
+    // PF("mDNS responder started. Ping for %s.local:%d\r\n", !name, eep.wifi.port); 
+	
+	B64 name;
+	WiFi.macAddress( mac );
+	name.set("GKE%02X%02X", mac[0], mac[5] );     // MSB and LSB of mac address
+	ASSERT( MDNS.begin( !name ) ) ;
+	PF("mDNS advertising: %s.local:%d\r\n", name.c_str(), eep.wifi.port ); 
     
     cpu.led( BLINK, 2 );            // indicates successful WiFi connection 
 }

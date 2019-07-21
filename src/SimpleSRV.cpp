@@ -12,7 +12,9 @@
 	
 // --------- Forward References needed by the editor ------------------------------
 
-    void handleFileList();
+    void handleCLItxt();
+	void handleCLIhtm();
+	void handleFileList();
     bool handleFileRead(String path);
     bool handleFileRead1(String path);
     void handleFileDelete();
@@ -30,9 +32,10 @@ char *Landing_AP_Page 	= 	"<h1 align='center'>AP Mode</h1>"\
 							"<h2 align='center'>Click for <a href=\"index.htm\">INDEX</a> | <a href=\"help\">HELP</a> | <a href='/'>ROOT</a></h2>";
 								
 char *Landing_Help_Page = 	"<h2 align='center'><b>END POINTS (hardcoded)</b><br/><br/>"\
-							"<a href=\"ewifi\">Show WiFi Credentials</a> (/ewifi)<br/>"\
+							"<a href=\"status\">Show WiFi Status</a> (/status)<br/>"\
 							"<a href=\"trace\">Show/Change trace</a> (/trace )<br/>"\
 							"<a href=\"files\">Hyperlinked list of files</a> (/files, /dir)<br/>"\
+							"<a href=\"cli?cmd=h\">Simple text CLI</a> (/cli?cmd=...)<br/>"\
 							"<a href=\"reset\">Reset CPU</a> (/reset)<br/>"\
 							"<a href=\"upload\">Upload file</a> (/upload)<br/>"\
 							"<a href=\"ed\">Delete file</a> (/ed?del=file)<br/>"\
@@ -65,21 +68,37 @@ void cliCallbacks( ESP8266WebServer &myserver, BUF &mybuffer )
     cliresp = &mybuffer;								// save pointer to buffer area
 	servptr = &myserver;								// save pointer to server
 	
-	SERVER_ON("/webcli.htm", HTTP_GET,              // when command is submitted, webcli.htm is called  
-    [](){
-        showArgs();
-        if( server.args() )                                     // if command given
-        {
-            cliresp->init();                                     // initialize the response buffer
-            B80 temp;
-            temp.set( server.arg(0).c_str() );
-            exe.dispatchBufPtr( !temp, cliresp );                  // command is executed here and response is saved in 'cliresp' buffer
+	SERVER_ON("/cli", 		 HTTP_GET,	handleCLItxt );			// simple CLI without .htm file
+    SERVER_ON("/webcli.htm", HTTP_GET,	handleCLIhtm );			// simple CLI without .htm file
+	
+	// [](){
+        // showArgs();
+		// cliresp.set("Use /cli?cmd=<args>");
+        // if( server.args() )                                 // if command given
+        // {
+            // cliresp->init();                              	// initialize the RESPONSE buffer
+			// B80 cmd;
+			// cmd.copy( server.arg(0).c_str() );
+			// exe.dispatchBuf( !cmd, cliresp );  				// command is executed here and RESPONSE is saved in 'resp' buffer
+        // }        
+		// showJson( !cliresp );                           		// show the same on the console
+        // server.send(200, "text/plain", !cliresp );
+    // });
+	// SERVER_ON("/webcli.htm", HTTP_GET,              // when command is submitted, webcli.htm is called  
+    // [](){
+        // showArgs();
+        // if( server.args() )                                     // if command given
+        // {
+            // cliresp->init();                                     // initialize the response buffer
+            // B80 cmd;
+            // cmd.copy( server.arg(0).c_str() );
+            // exe.dispatchBufPtr( !cmd, cliresp );                  // command is executed here and response is saved in 'cliresp' buffer
             
-            cliresp->add("(Used:%d of %d bytes)\r\n", cliresp->length(), cliresp->size());
-        }        
-        showJson( cliresp->c_str() );                                   // show the same on the console
-        handleFileRead("/webcli.htm" );                         // reprint same html
-    });
+            // cliresp->add("(Used:%d of %d bytes)\r\n", cliresp->length(), cliresp->size());
+        // }        
+        // showJson( cliresp->c_str() );                                   // show the same on the console
+        // handleFileRead("/webcli.htm" );                         // reprint same html
+    // });
     SERVER_ON("/clirsp", HTTP_GET,      
     [](){
         showArgs();
@@ -87,6 +106,30 @@ void cliCallbacks( ESP8266WebServer &myserver, BUF &mybuffer )
         SERVER_SEND(200, "text/html", cliresp->c_str() );
     });
 }
+
+void handleCLI( bool mode )
+{
+	showArgs();
+
+	cliresp->copy("Use /cli?cmd=<args>");
+
+	if( server.args() )                                 // if command given
+	{
+		cliresp->init();                              	// initialize the RESPONSE buffer
+		B80 cmd;
+		cmd.copy( server.arg(0).c_str() );
+		exe.dispatchBufPtr( !cmd, cliresp );  				// command is executed here and RESPONSE is saved in 'resp' buffer
+		cliresp->add("(Used:%d of %d bytes)\r\n", 
+				cliresp->length(), cliresp->size());
+	}        
+	showJson( cliresp->c_str() );                           		// show the same on the console
+	if( mode )
+		handleFileRead("/webcli.htm" );
+	else
+		server.send(200, "text/plain", cliresp->c_str() );	
+}
+void handleCLItxt() {handleCLI( false ); }
+void handleCLIhtm() {handleCLI( true ); }
 
 // ----------------------- Server Callbacks() -------------------------------------
 
@@ -127,16 +170,16 @@ void srvCallbacks( ESP8266WebServer &myserver, char *landingpage )
       delay( 1000 );
       ESP.reset();
     }); 
-    SERVER_ON("/ewifi", HTTP_GET, 
+    SERVER_ON("/status", HTTP_GET, 
     [](){
       showArgs();
-      BUF json( 200 );
-      json.add( "<h3 align='center'>ssid: %s, pwd: %s, port: %d, RSSI: %ddBm, Heap max: %d</h3>", 
-							eep.wifi.ssid, eep.wifi.pwd, eep.wifi.port, WiFi.RSSI(), cpu.heapUsedMax() );
-	  json.add( navigate );
-      showJson( !json );  
-      SERVER_SEND(200, "text/html", !json);
+      BUF tmp( 256 );
+	  getWiFiStatus( &tmp, true/*Use HTML*/ );	// fill buffer with status
+	  tmp.add( navigate );						// add navigation
+      showJson( !tmp );  
+      SERVER_SEND(200, "text/html", !tmp);		// serve this page
     }); 
+	
 	SERVER_ON("/wifi", HTTP_GET, 
     [](){
       showArgs();
@@ -209,6 +252,7 @@ void srvCallbacks( ESP8266WebServer &myserver, char *landingpage )
 		showJson( !s );  
         SERVER_SEND(200, "text/html", !s);
     });
+
 
     // --------------- editor files ------------------------
     SERVER_ON("/list", HTTP_GET, handleFileList );
@@ -549,4 +593,43 @@ void handleFileUploadOLD()
       fsUploadFile.close();
     Serial.print("handleFileUpload Size: "); Serial.println(upload.totalSize);
   }
+}
+// ------------------------ WiFi Status ---------------------------------
+
+void getWiFiStatus( BUF *s, bool usehtml )
+{
+	char *termT = "<br/>\r\n";		
+	char *termF = "\r\n\t";
+	char *term = usehtml ? termT: termF;
+	
+	s->init();
+	if( usehtml )
+		s->add( "<h3 align='center'>" );
+	else
+		s->add("\t");
+	
+	s->add(" CPU: %04x%s", ESP.getChipId(), term );
+	s->add("Core: %s%s",   ESP.getCoreVersion().c_str(), term);
+		
+	uint8_t m[6];
+	WiFi.macAddress( m );
+	s->add(" MAC: %02x:%02x:%02x:%02x:%02x:%02x%s", m[0],m[1],m[2],m[3],m[4],m[5], term );
+
+	IPAddress ipa; 
+	ipa = WiFi.localIP();        
+	s->add("  IP: %s%s",  		ipa.toString().c_str(), term );
+	
+	s->add("DHCP: %s%s",     	WiFi.hostname().c_str(), term );
+	s->add("SSID: %s%s",  		WiFi.SSID().c_str(), term );
+	s->add(" PWD: %s%s",   		WiFi.psk().c_str(), term );
+	s->add("Chan: %d%s",   		WiFi.channel(), term );
+	s->add("RSSI: %d dBm%s",		WiFi.RSSI(), term );
+	s->add("HeapUse: %d KB%s", 	cpu.heapUsedNow()/1024, term );
+	s->add("HeapMax: %d KB%s", 	cpu.heapUsedMax()/1024, term );
+	
+	if( usehtml )
+	{
+		s->add( "</h3>");
+		s->add( navigate );
+	}	
 }
