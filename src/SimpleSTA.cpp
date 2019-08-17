@@ -7,7 +7,7 @@
     #include "SimpleSTA.h"          // exported functions by this file    
 
 // ----------------------- Console interface ----------------------------------------
-void interactForever()
+void interactForever( BUF *bp )
 {
     PF("\r\nCLI Mode. Press 'h' for help\r\n");
     cpu.led( ON );
@@ -21,12 +21,19 @@ void interactForever()
             char *cmd = cli.gets();
 			if( strcmp( cmd, "exit")==0 )
 				break;
-            exe.dispatchConsole( cmd );
+            if( bp == NULL )
+				exe.dispatchConsole( cmd );		// process with printf()
+			else
+			{
+				bp->init();						// process using supplied buffer
+				exe.dispatchBufPtr( cmd, bp );
+				bp->print();
+			}
             cli.prompt();
         }
     }
 }
-bool startCLIAfter( int timeout )
+bool startCLIAfter( int timeout, BUF *bp )
 {
 	cli.init( ECHO_ON, "cmd: " );       
 
@@ -40,14 +47,15 @@ bool startCLIAfter( int timeout )
 		if( Serial.read() == 0x0D )
 		{
 			CRLF();
-			interactForever();
+			interactForever( bp );
 			PRN("Continuing Setup()...");
 			break;                          // break the loop if 'exit' is entered    
 		}
 		if( cpu.button() )
             return true;
 		delay( 10 );
-	}   
+	} 
+	CRLF();	
 	return false;
 }
 
@@ -62,17 +70,20 @@ void setupSTA()
 	PR("\r\nSTA mode...\r\n\tMAC=");
 	PRN( WiFi.macAddress() );                   // mac is used later to define mDNS
 	
-    WiFi.mode(WIFI_STA);
-
+//    WiFi.mode(WIFI_STA);
+	WiFi.begin( eep.wifi.ssid, eep.wifi.pwd );	// see: https://circuits4you.com/2018/03/09/esp8266-static-ip-address-arduino-example/
+	WiFi.disconnect();							// 
+	
     char *staticIP = eep.wifi.stIP;
     if( *staticIP )
     {
-        IPAddress ip, gateway(192,168,0,1), subnet( 255,255,255,0 );
+        IPAddress ip, gateway(192,168,0,1), subnet( 255,255,255,0 ), dns(8, 8, 8, 8);
         ip.fromString( staticIP );
-        WiFi.config( ip, gateway, subnet );
+        WiFi.config( ip, gateway, subnet, dns );
     }
     WiFi.begin( eep.wifi.ssid, eep.wifi.pwd );
-    
+    WiFi.mode(WIFI_STA);
+	
     for( int i=0; (i<WIFI_TIMEOUT_SEC*2)||(WIFI_TIMEOUT_SEC==0); i++  )
     {
         if( WiFi.status() == WL_CONNECTED )

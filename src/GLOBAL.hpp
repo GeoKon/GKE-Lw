@@ -19,7 +19,7 @@
             eep.initWiFiParms();                        // initialize with default WiFi AND save them in eeprom
             
             initMyEEParms();                            // initialize user EEPROM parameters
-            saveMyEEParms();
+            saveMyEEParms();							// save user EEPROM parameters
         }
         PF("Fetching %d user parms\r\n", bsize ); 
         eep.fetchUserStruct( bpntr, bsize );            // from EEPROM to working memory area   
