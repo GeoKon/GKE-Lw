@@ -30,4 +30,5 @@
     String formatBytes(size_t bytes);
     String getContentType(String filename);
 	bool handleFileRead(String path);
+	void bufWiFiStatus( BUF *s, bool userhtml );
 	void getWiFiStatus( BUF *s, bool userhtml );

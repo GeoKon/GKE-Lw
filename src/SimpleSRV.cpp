@@ -595,14 +595,13 @@ void handleFileUploadOLD()
   }
 }
 // ------------------------ WiFi Status ---------------------------------
-
-void getWiFiStatus( BUF *s, bool usehtml )
+void bufWiFiStatus( BUF *s, bool usehtml )
 {
 	char *termT = "<br/>\r\n";		
 	char *termF = "\r\n\t";
 	char *term = usehtml ? termT: termF;
 	
-	s->init();
+
 	if( usehtml )
 		s->add( "<h3 align='center'>" );
 	else
@@ -625,11 +624,16 @@ void getWiFiStatus( BUF *s, bool usehtml )
 	s->add("Chan: %d%s",   		WiFi.channel(), term );
 	s->add("RSSI: %d dBm%s",		WiFi.RSSI(), term );
 	s->add("HeapUse: %d KB%s", 	cpu.heapUsedNow()/1024, term );
-	s->add("HeapMax: %d KB%s", 	cpu.heapUsedMax()/1024, term );
+	s->add("HeapMax: %d KB%s", 	cpu.heapUsedMax()/1024, term );	
 	
 	if( usehtml )
 	{
 		s->add( "</h3>");
 		s->add( navigate );
-	}	
+	}
+}
+void getWiFiStatus( BUF *s, bool usehtml )
+{
+	s->init();
+	bufWiFiStatus( s, usehtml );
 }
