@@ -7,7 +7,7 @@
 	bool startCLIAfter( int timeoutsec, BUF *bp=NULL );
     void interactForever( BUF *bp=NULL );
 	
-    void setupSTA();
+    bool setupSTA( int tmout = 20 );
     void loopSTA();
 	
 	

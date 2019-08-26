@@ -61,16 +61,13 @@ bool startCLIAfter( int timeout, BUF *bp )
 
 // ----------------------- Exported functions -------------------------------------
 
-#define WIFI_TIMEOUT_SEC 5
-
-void setupSTA()
+bool setupSTA( int tmout )
 {
     byte mac[6];
 	
 	PR("\r\nSTA mode...\r\n\tMAC=");
 	PRN( WiFi.macAddress() );                   // mac is used later to define mDNS
 	
-//    WiFi.mode(WIFI_STA);
 	WiFi.begin( eep.wifi.ssid, eep.wifi.pwd );	// see: https://circuits4you.com/2018/03/09/esp8266-static-ip-address-arduino-example/
 	WiFi.disconnect();							// 
 	
@@ -79,18 +76,21 @@ void setupSTA()
     {
         IPAddress ip, gateway(192,168,0,1), subnet( 255,255,255,0 ), dns(8, 8, 8, 8);
         ip.fromString( staticIP );
+		PR( "See IP="); PR( staticIP ); PR(" "); PRN( ip );
         WiFi.config( ip, gateway, subnet, dns );
+
     }
     WiFi.begin( eep.wifi.ssid, eep.wifi.pwd );
     WiFi.mode(WIFI_STA);
 	
-    for( int i=0; (i<WIFI_TIMEOUT_SEC*2)||(WIFI_TIMEOUT_SEC==0); i++  )
+    bool ok = false;
+	for( int i=0; (i<tmout*2)||(tmout==0); i++  )
     {
         if( WiFi.status() == WL_CONNECTED )
         {
             PF( "Connected to %s. Hostname is %s. ", WiFi.SSID().c_str(), WiFi.hostname().c_str() );
             PR( "IP Address " ); PRN( WiFi.localIP() );
-            //PR( fileList() );
+            ok = true;
             break;
         }
         delay(250);
@@ -105,13 +105,14 @@ void setupSTA()
     // MDNS.addService("GKEUDP", "udp", 5353);
     // PF("mDNS responder started. Ping for %s.local:%d\r\n", !name, eep.wifi.port); 
 	
-	B64 name;
+	B64( name );
 	WiFi.macAddress( mac );
 	name.set("GKE%02X%02X", mac[0], mac[5] );     // MSB and LSB of mac address
 	ASSERT( MDNS.begin( !name ) ) ;
 	PF("mDNS advertising: %s.local:%d\r\n", name.c_str(), eep.wifi.port ); 
     
     cpu.led( BLINK, 2 );            // indicates successful WiFi connection 
+	return ok;
 }
 
 void loopSTA()
