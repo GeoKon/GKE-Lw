@@ -116,7 +116,7 @@ void handleCLI( bool mode )
 	if( server.args() )                                 // if command given
 	{
 		cliresp->init();                              	// initialize the RESPONSE buffer
-		B80 cmd;
+		B80( cmd );
 		cmd.copy( server.arg(0).c_str() );
 		exe.dispatchBufPtr( !cmd, cliresp );  				// command is executed here and RESPONSE is saved in 'resp' buffer
 		cliresp->add("(Used:%d of %d bytes)\r\n", 
