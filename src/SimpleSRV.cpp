@@ -352,18 +352,40 @@ int getTrace() {return g_trace;}
 String fileList( bool br )
 {
     Dir dir = SPIFFS.openDir("/");
-    BUF output("",500);
+
+	String res;			// allocate into the heap
+	B80( output );		// allocate this string into the stack
     while (dir.next()) 
     {    
         String fileName = dir.fileName();
         size_t fileSize = dir.fileSize();
-        output.add( "\t%s (%s)", fileName.c_str(), formatBytes(fileSize).c_str() );
+        
+		output.add( "\t%s (%s)", fileName.c_str(), formatBytes(fileSize).c_str() );
         if( br )
             output.add( "<br/>" );
         output.add("\r\n");
+		res += output.c_str();		// append to String
     }  
-    return String( !output );
+    return res;
 }
+
+// discovered problem above!
+// String fileList( bool br )
+// {
+    // Dir dir = SPIFFS.openDir("/");
+    // BUF output(500);
+	// output.set("");
+    // while (dir.next()) 
+    // {    
+        // String fileName = dir.fileName();
+        // size_t fileSize = dir.fileSize();
+        // output.add( "\t%s (%s)", fileName.c_str(), formatBytes(fileSize).c_str() );
+        // if( br )
+            // output.add( "<br/>" );
+        // output.add("\r\n");
+    // }  
+    // return String( output.c_str() );
+// }
 // see: https://tttapa.github.io/ESP8266/Chap12%20-%20Uploading%20to%20Server.html
 
 String getContentType(String filename) // convert the file extension to the MIME type
