@@ -23,6 +23,7 @@ extern NMP nmp;
 
 static char *channel = "";
 #define BINIT( A, ARG )    BUF *A = (BUF *)ARG[0]
+
 #define RESPONSE( A, ... ) if( bp )                     \
                             bp->add(A, ##__VA_ARGS__ ); \
                            else                         \
@@ -36,19 +37,19 @@ void linkParms2cmnTable( IGlobal *p )		// link this module to global parameters
 }
 // ----------------------------- CLI Command Handlers ---------------------------
 
-    void help ( int n, char **arg ){exe.help ( n, arg );}    // what to do when "h" is entered
-    void brief( int n, char **arg ){exe.brief( n, arg );} 
+    static void help ( int n, char **arg ){exe.help ( n, arg );}    // what to do when "h" is entered
+    static void brief( int n, char **arg ){exe.brief( n, arg );} 
     
     // ============================== LOW LEVEL DIAGNOSTIC COMMANDS ===============================
  
-    bool kbabort()
+    static bool kbabort()
     {
         if( Serial.available() )
             if( Serial.read() == 0x0D )
                 return true;
         return false;
     }
-    void cliTestOut45( int n, char **arg )                         
+    static void cliTestOut45( int n, char **arg )                         
     {
         PRN("GPIO4, D1, CLK: ON(250ms), OFF(1000ms)");
         PRN("GPIO5, D2, SDA: ON(1000ms), OFF(250ms)");
@@ -70,7 +71,7 @@ void linkParms2cmnTable( IGlobal *p )		// link this module to global parameters
         }
         CRLF();
     }
-    void cliTestInputs( int n, char **arg )                        // displays list of files  
+    static void cliTestInputs( int n, char **arg )                        // displays list of files  
     {
         pinMode(14,INPUT);
         pinMode(2, INPUT);
@@ -89,7 +90,7 @@ void linkParms2cmnTable( IGlobal *p )		// link this module to global parameters
            delay( 400 );
        }
     }
-    void cliInputPIN( int n, char **arg )                        
+    static void cliInputPIN( int n, char **arg )                        
     {
         if( n<=1 )
         {
@@ -115,7 +116,7 @@ void linkParms2cmnTable( IGlobal *p )		// link this module to global parameters
            delay( 100 );
        }
     }
-    void cliOutputPIN( int n, char **arg )                        
+    static void cliOutputPIN( int n, char **arg )                        
     {
         static bool toggle = false;
         if( n<=1 )
@@ -134,12 +135,12 @@ void linkParms2cmnTable( IGlobal *p )		// link this module to global parameters
            delay( 500 );
        }
     }
-    void cliFormat( int n, char **arg )                        
+    static void cliFormat( int n, char **arg )                        
     {
         SPIFFS.format();
         PF("OK\r\n");
     }
-    void cliDirectory( int n, char **arg )                        
+    static void cliDirectory( int n, char **arg )                        
     {
         Dir dir = SPIFFS.openDir("/");
         while (dir.next()) 
@@ -152,73 +153,76 @@ void linkParms2cmnTable( IGlobal *p )		// link this module to global parameters
 
 // ============================== MEGUNO LINK INTERFACE for EEPROM ===============================
 
-    void cliShowSystemStatus( int n, char **arg )
+    static void cliShowSystemStatus( int n, char **arg )
     {
         BINIT( bp, arg );
-        bufWiFiStatus( bp, false );                 // included in SimpleSRV.cpp
-    }
-    void mgnShowSystemStatus( int n, char **arg )
-    {
-        BINIT( bp, arg );
-        
-        // construct the meguno message
-        bp->set("{UI:CONFIG|SET|status.Text=");
-        bufWiFiStatus( bp, false );                    // included in SimpleSRV.cpp
-        bp->add( "}\r\n" );
+        if( exe.cmd1stUpper() )
+		{
+			// construct the meguno message
+			bp->set("{UI:CONFIG|SET|status.Text=");
+			bufWiFiStatus( bp, false );                    // included in SimpleSRV.cpp
+			bp->add( "}\r\n" );
+		}
+		else
+			bufWiFiStatus( bp, false );                 // included in SimpleSRV.cpp
     }
 
 // =========================== PARAMETER (EEPROM) MANAGEMENT ==============================
 
-    void cliInitEEParms( int n, char **arg )       // initialize all EEPROM parms and save them
+    static void cliInitEEParms( int n, char **arg )       // initialize all EEPROM parms and save them
     {
         BINIT( bp, arg );
-        eep.initHeadParms();        				// initialize header parameters AND save them in eeprom
-        eep.saveHeadParms();
+		eep.initHeadParms();        				// initialize header parameters AND save them in eeprom
+		eep.saveHeadParms();
 
-        eep.initWiFiParms();
-        eep.saveWiFiParms();
-                
-        gbl->initMyEEParms();        
-        gbl->saveMyEEParms();
-        RESPONSE("Initialized\r\n");        
+		eep.initWiFiParms();
+		eep.saveWiFiParms();
+				
+		gbl->initMyEEParms();        
+		gbl->saveMyEEParms();
+
+        if( exe.cmd1stUpper() )
+		{
+			nmp.printMgnInfo( channel, "", "EE Parms" );     
+			eep.printWiFiParms( channel ); 
+			nmp.printMgnAllParms( channel );
+		}
+		RESPONSE("Initialized\r\n");        
     }
-    void mgnInitEEParms( int n, char **arg )        // initialize all EEPROM parms and save them
-    {
-        cliInitEEParms( n, arg );
-        nmp.printMgnInfo( channel, "", "EE Parms" );     
-        eep.printWiFiParms( channel ); 
-        nmp.printMgnAllParms( channel );
-    }
-    void cliShowWiFiParms( int n, char **arg )
-    {
-        BINIT( bp, arg );          
-        eep.printWiFiParms("", bp);      
-    }
-    void cliShowAllParms( int n, char **arg )
+    static void cliShowWiFiParms( int n, char **arg )
     {
         BINIT( bp, arg );          
         eep.printWiFiParms("", bp);      
-        nmp.printAllParms("", bp );          
     }
-    void cliShowUserParms( int n, char **arg )
+    static void cliShowAllParms( int n, char **arg )
+    {
+		if( exe.cmd1stUpper() )
+		{
+			nmp.printMgnInfo( channel, "", "All EEP Parms" );     
+			
+			PF( "{TABLE:CONFIG|SET|WIFI PARMS| |---------------------------- }\r\n");
+			eep.printMgnWiFiParms( channel ); 
+			PF( "{TABLE:CONFIG|SET|USER PARMS| |---------------------------- }\r\n");
+			nmp.printMgnAllParms( channel );
+		}
+		else
+        {
+			BINIT( bp, arg );          
+			eep.printWiFiParms("", bp);      
+			nmp.printAllParms("", bp );          
+		}
+    }
+    static void cliShowUserParms( int n, char **arg )
     {            
         BINIT( bp, arg );
         int N = nmp.getParmCount();
-        for( int i=0; i<N; i++ )
+        
+		for( int i=0; i<N; i++ )
         {
             RESPONSE( "%s=%s%s", nmp.getParmName(i), nmp.getParmValueStr(i), (i==N-1)?"\r\n":", " );
         }
     }
-    void mgnShowAllParms( int n, char **arg )
-    {
-        nmp.printMgnInfo( channel, "", "All EEP Parms" );     
-        
-        PF( "{TABLE:CONFIG|SET|WIFI PARMS| |---------------------------- }\r\n");
-        eep.printMgnWiFiParms( channel ); 
-        PF( "{TABLE:CONFIG|SET|USER PARMS| |---------------------------- }\r\n");
-        nmp.printMgnAllParms( channel );
-    }
-    void cliGetUserParm( int n, char **arg )
+    static void cliGetUserParm( int n, char **arg )
     {
         BINIT( bp, arg );        
         if( n<=1 )
@@ -235,63 +239,62 @@ void linkParms2cmnTable( IGlobal *p )		// link this module to global parameters
         }
     }
     
-    static bool _setresult; // to communicate result to next routine
-    void cliSetAnyParm( int n, char **arg )
-    {
-        BINIT( bp, arg );   
-        bool ok;
-        if( n<=2 )
+	// ----------------------- Generic Routine to Save Any Parameter ----------------------------
+	
+	static bool setAnyEEParm( int n, char **arg, bool meg )
+    {        
+        BINIT( bp, arg );
+		if( n<3 )
         {
             RESPONSE("? Missing <name> <value>\r\n" );
-            ok = false;
+            return false;
         }
-        else
+		char *parm = arg[1];
+		char *value = arg[2];
+		
+        if( eep.setWiFiParm( parm, value ) )            // if WiFi parm found, modify & save in EEPROM
         {
-            ok = eep.setWiFiParm( arg[1], arg[2] );         // if found, modify & save in EEPROM
-            if( !ok )        
-            {
-                ok = nmp.setParmByStr( arg[1], arg[2] );         // if found, change parameter
-                if( ok )
-                    gbl->saveMyEEParms();                         // save to EEPROM
-            }            
+            if( meg )
+                eep.printMgnWiFiParms( channel ); 
+            RESPONSE( "%s updated\r\n", parm ); 
+            return true;
         }
-        RESPONSE( ok ? "%s updated\r\n" : "%s not found\r\n", arg[1] ); 
-    }
-    void mgnSetAnyParm( int n, char **arg )
+        if( !nmp.setParmByStr( parm, value ) )          // if EEPROM User parm not found
+        {
+            if( meg )
+                nmp.printMgnInfo( channel, parm, "is unknown" );
+            RESPONSE( "%s not found\r\n", parm );
+            return false;
+        }        
+        // Here, parameter has been updated. Save in EEPROM, update Meguno, and 
+        //  selectively call initialization functions.
+        
+        gbl->saveMyEEParms();                            // save to EEPROM
+        if( meg )
+        {
+            nmp.printMgnParm( channel, parm );              // update the table
+            nmp.printMgnInfo( channel, parm, "updated" );   // update the INFO  
+        }
+        RESPONSE( "%s updated\r\n", parm ); 
+        return true;
+    }	
+    static void cliSetAnyParm( int n, char **arg )
     {
-        bool ok;
-        if( n<=2 )
-        {
-            nmp.printMgnInfo( channel, "", "Missing args" );
-            return;
-        }
-        else
-        {
-            ok = eep.setWiFiParm( arg[1], arg[2] );              // if found, modify & save in EEPROM
-            if( ok ) 
-                eep.printMgnWiFiParms( channel );
-            else
-            {
-                ok = nmp.setParmByStr( arg[1], arg[2] );         // if found, change parameter
-                if( ok )
-                {
-                    gbl->saveMyEEParms();                         // save to EEPROM
-                    nmp.printMgnParm( channel, arg[1] );         // update the table
-                }
-            }            
-        }
-        nmp.printMgnInfo( channel, arg[1], (char *) (ok ? "updated": "is unknown") );    // update the INFO    
-    }
+		setAnyEEParm( n, arg, exe.cmd1stUpper() );
+	}
+
 
 // ============================== CLI COMMAND TABLE =======================================
-                     
+
     CMDTABLE cmnTable[]= 
     {
         {"h",       "[mask]. Lists of all commands",                    help },
         {"b",       "[mask]. Brief help",                               brief },
-        {"p",       "shows user parameters (brief)",                    cliShowUserParms },
-        {"w",       "shows WiFi parameters (brief)",                    cliShowWiFiParms },
-        
+        {"w",       "Shows WiFi parameters (brief)",                    cliShowWiFiParms },
+        {"wifi",    "[or Wifi]. Displays wifi and system status",       cliShowSystemStatus },
+		{"p",       "Shows user parameters (brief)",                    cliShowUserParms },
+		{"parms",   "[or Parms]. Show all eeprom parameters",   		cliShowAllParms }, 
+		
         {"test45",  "Flip-flops (LED) (GPIO4) (GPIO5) until CR",        cliTestOut45 },
         {"testinp", "Inputs GPIOs: 02, 04, 05, 14 until CR",            cliTestInputs },
         {"inpPIN",  "p1 p2 ... pN. Inputs PINS until CR",               cliInputPIN },
@@ -301,24 +304,16 @@ void linkParms2cmnTable( IGlobal *p )		// link this module to global parameters
         {"dir",     "List files in FS",                                 cliDirectory }, 
         
         {"initEE",  "Initialize parameters to defaults and save to EEP",cliInitEEParms },
-        {"!initEE", "",                                                 mgnInitEEParms },
 
-        {"set",     "name value. Update parm & save in EEPROM",         cliSetAnyParm },
-        {"!set",    "",                                                 mgnSetAnyParm },
+        {"set",     "[or Set] name value. Update parm & save in EEPROM",cliSetAnyParm },
         {"get",     "name1..nameN. Get parameter values",               cliGetUserParm },
-        
-        {"show",    "show all parameters",                              cliShowAllParms }, 
-        {"!show",   "",                                                 mgnShowAllParms }, 
-        
-        {"wifi",    "Displays wifi and system status",                  cliShowSystemStatus },
-        {"!wifi",   "",                                                 mgnShowSystemStatus },
 
         { "restart", "Reboot CPU (longjmp)",        [](int, char**){ PRN("Restarting!"); longjmp( gbl->env, 1 ); } },
         { "disc", 	"Disconnect WiFi (diag)",       [](int, char**){ PRN("Disconnecting!");WiFi.disconnect(); }   }, 
 		
         {NULL, NULL, NULL}
     };
-
-#undef BINIT
 #undef RESPONSE
+#undef BINIT
+
 
