@@ -1,7 +1,7 @@
 // -------- Choose one of the two options below ---------------------------------
 
 //  #define MULTI_WIFI		
-#undef  MULTI_WIFI
+	#undef  MULTI_WIFI
 
 // -------------------------------------------------------------------------------
 
@@ -15,9 +15,37 @@
     #include "ledClass.h"
 	#include "SimpleSTA.h"          // exported functions by this file    
 	
-LED led;							// allocate the LED structure
+// ------------------- blinking LED pattern -----------------------------------------
+	
+	LED led;						// allocate the LED structure
 
 // ----------------------- Console interface ----------------------------------------
+
+static void doSmartConfig()								// waits for mobile app credentials
+{														//   and updates EEPROM
+	PRN("Attempting Smart Config" );	
+	led.pattern( WAITFOR_SMARTCONFIG );					// define smart conf. LED pattern
+	WiFi.beginSmartConfig();
+   
+	while( led.blink( !WiFi.smartConfigDone() ))		// wait forever for smart conf. app
+		;
+	ASSERT( led.aborted() );							// Smart config OK
+	
+	strcpy( eep.wifi.ssid, WiFi.SSID().c_str() );		// update EEPROM parms
+	strcpy( eep.wifi.pwd,  WiFi.psk().c_str() );
+	eep.saveWiFiParms();
+	PRN("Smartconf OK. WiFi Credentials saved in EEPROM");
+}
+
+/* 
+ *  Waits for 'timeout' for either button-press or RETURN to be pressed.
+ *  While in this loop, blinks LED fast.
+ *  If RETURN is pressed, enters CLI, with LED ON. If the command "exit" is entered
+ *    this routine returns with 'false'
+ *  If Button is pressed, activates the Smart Config, until new credentials are
+ *    entered using the Mobile App. If new credentials entered, they are saved in
+ *    EEPROM and returns with 'true'. 
+ */
 
 bool startCLIAfter( int timeout, BUF *bp )
 {
@@ -25,18 +53,19 @@ bool startCLIAfter( int timeout, BUF *bp )
 	
 	PFN("Press RETURN within %d sec to start CLI", timeout );
 	
-	led.pin( cpu.getLedPin() );
-	led.pattern( WAITFOR_CLI, timeout);
+	led.pin( cpu.getLedPin() );				// define the LED pin
+	led.pattern( WAITFOR_CLI, timeout);		// define the blinking timeout
 	
 	while( led.blink( Serial.read() != 0x0D ) )
 	{
-		if( cpu.buttonPressed() )
+		if( cpu.buttonPressed() )			// if button is pressed...
 		{
-			led.stop();						// stop blinking
+			doSmartConfig();				// wait until smart config is done
+			led.stop();
 			return true;					
 		}
 	}	
-	if( led.expired() )
+	if( led.expired() )						
 		return false;
 	
 	if( led.aborted() )
@@ -87,6 +116,10 @@ bool isWiFiConnected()
     return false;
 } 
 
+/* 
+ * Connects to WiFi. If no connection is made within 30sec, resets the processor.
+ * While is waiting for connection, the LED blinks slowly.
+ */
 void setupWiFi( char *ssid, char *pwd, char *staticIP )
 {
 	// Force clearing the previous settings
@@ -107,35 +140,14 @@ void setupWiFi( char *ssid, char *pwd, char *staticIP )
   	
 	PFN("Attempting to connect to SSID:%s with PWD:%s", ssid, pwd );
 	
-	bool dosmart = false;
 	led.pin( cpu.getLedPin() );
-	led.pattern( WAITFOR_WIFI, 20 );						// 20 second timeout
+	led.pattern( WAITFOR_WIFI, 30 );						// 30 second timeout
 	
 	while( led.blink( WiFi.status() != WL_CONNECTED ) )
-	{
-		if( cpu.button() )									// when interrupting the loop, 
-		{													//  need to stopLED
-			led.stop();
-			dosmart = true;
-			break;
-		}
-	}
-	if( dosmart || led.expired() )
-  	{
-    	PRN("Attempting Smart Config" );	
-        led.pattern( WAITFOR_SMARTCONFIG );					// wait forever
-        WiFi.beginSmartConfig();
-       
-        while( led.blink( !WiFi.smartConfigDone() ))		
-       		;
-		ASSERT( led.aborted() );							// Smart config OK
-		strcpy( eep.wifi.ssid, WiFi.SSID().c_str() );
-		strcpy( eep.wifi.pwd,  WiFi.psk().c_str() );
-		eep.saveWiFiParms();
-		PRN("Smartconf OK. WiFi Credentials saved in EEPROM");
-    }
-    if( led.aborted() )										// connection successful
 		;
+	
+	if( led.expired() )										// Reset the processor if no connection
+		ESP.restart();
 	
 	PFN( "Hostname:%s, SSID:%s, PWD:%s, RSSI:%ddBm", 
 		WiFi.hostname().c_str(), 
@@ -227,15 +239,25 @@ void reconnectWiFi( void (*cb)(), const char *pattern )
 	}
 }
 
+char *getDevName( char *subname )
+{
+	static char name[20];
+	if( subname != NULL )
+	{
+		byte mac[6];
+		WiFi.macAddress( mac );
+		sf( name, 20, "Gke%s-%02X%02X", subname, mac[0], mac[5] );     // MSB and LSB of mac address
+	}
+	return name;		// if NULL, it returns the previously set name
+}
 bool startMDNS()
 {
 	byte mac[6];
-	B64( name );
+	char *name = getDevName();
 	WiFi.macAddress( mac );
-	name.set("GKE%02X%02X", mac[0], mac[5] );     // MSB and LSB of mac address
-	bool ok = MDNS.begin( !name ) ;
+	bool ok = MDNS.begin( name ) ;
 	if( ok )
-		PF("mDNS advertising: %s.local:%d\r\n", name.c_str(), eep.wifi.port ); 
+		PF("mDNS advertising: %s.local:%d\r\n", name, eep.wifi.port ); 
 	else
 		PF("mDNS could not start!\r\n" );
 	return ok;	

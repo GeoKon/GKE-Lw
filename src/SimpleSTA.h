@@ -30,6 +30,8 @@ enum recon_t
 	bool checkWiFi();
 	void reconnectWiFi( void (*cb)()=NULL,
 					    const char *pattern=WAITFOR_RECONN);				
+	
+	char *getDevName( char *subname="" );
 	bool startMDNS();
 
     void loopSTA();
